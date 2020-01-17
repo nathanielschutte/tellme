@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <iostream>
 
 // winsock functions, lib
 #include <WS2tcpip.h>
@@ -11,8 +12,14 @@
 // forward declare
 class CTcpListener;
 
-// callback to data received
-typedef void(*MessageReceivedHandler)(CTcpListener* listener, int socketId, std::string msg);
+// callback for data received
+typedef void(*MessageReceivedHandler)(CTcpListener* listener, int socketId, std::string clientName, std::string msg);
+
+// callback for client connect
+typedef void(*ClientConnectHandler)(CTcpListener* listener, int socketId, std::string clientName);
+
+// callback for client disconnect
+typedef void(*ClientDisconnectHandler)(CTcpListener* listener, int socketId, std::string clientName);
 
 
 class CTcpListener
@@ -20,7 +27,7 @@ class CTcpListener
 
 public:
 
-	CTcpListener(std::string ipAddress, int port, MessageReceivedHandler handler);
+	CTcpListener(std::string ipAddress, int port, MessageReceivedHandler msgHandler);
 
 	~CTcpListener();
 
@@ -37,13 +44,22 @@ public:
 	void cleanup();
 
 
+	// add more handlers
+	void addClientDisconnectHandler(ClientDisconnectHandler cdHandler) { ClientDisconnect = cdHandler; }
+
+	void addClientConnectHandler(ClientConnectHandler ccHandler) { ClientConnect = ccHandler; }
+
+
 private:
 
 	SOCKET createSocket();
 
-	SOCKET waitForConnection(SOCKET listener);
+	SOCKET waitForConnection(SOCKET listener, sockaddr_in* client);
 
 	std::string m_ipAddress;
 	int m_port;
+
 	MessageReceivedHandler MessageReceived;
+	ClientConnectHandler ClientConnect;
+	ClientDisconnectHandler ClientDisconnect;
 };

@@ -1,7 +1,7 @@
 #include "TcpServer.h"
 
-CTcpListener::CTcpListener(std::string ipAddress, int port, MessageReceivedHandler handler)
-	: m_ipAddress(ipAddress), m_port(port), MessageReceived(handler)
+CTcpListener::CTcpListener(std::string ipAddress, int port, MessageReceivedHandler msgHandler)
+	: m_ipAddress(ipAddress), m_port(port), MessageReceived(msgHandler)
 {
 
 }
@@ -17,6 +17,7 @@ void CTcpListener::sendMsg(int clientSocket, std::string msg)
 {
 	send(clientSocket, msg.c_str(), msg.size() + 1, 0);
 }
+
 // init winsock
 bool CTcpListener::init()
 {
@@ -33,6 +34,9 @@ bool CTcpListener::init()
 void CTcpListener::run()
 {
 	char buf[MAX_BUFFER_SIZE];
+	char host[NI_MAXHOST];
+	char service[NI_MAXSERV];
+	sockaddr_in clientAddr;
 
 	while (true)
 	{
@@ -40,38 +44,64 @@ void CTcpListener::run()
 		SOCKET listener = createSocket();
 		if (listener == INVALID_SOCKET)
 		{
+			std::cerr << "Invalid socket " << errno << std::endl;
 			break;
 		}
 
-		// wait for connection
-		SOCKET client = waitForConnection(listener);
-		if (client != INVALID_SOCKET)
-		{
+		// wait for connection.  m_client and m_clientSize hold connected client data
+		SOCKET clientSock = waitForConnection(listener, &clientAddr);
+		if (clientSock != INVALID_SOCKET)
+
 			// close once client has connected so no other client can connect
 			closesocket(listener);
+		{
+			// ---- client connected ----
+			ZeroMemory(host, NI_MAXHOST);
+			ZeroMemory(service, NI_MAXSERV);
+
+			if (ClientConnect != NULL)
+			{
+				if (getnameinfo((sockaddr*)&clientAddr, sizeof(clientAddr), host, NI_MAXHOST, service, NI_MAXSERV, 0) == 0)
+				{
+					ClientConnect(this, clientSock, std::string(host));
+					std::cout << host << std::endl;
+				}
+				else
+				{
+					inet_ntop(AF_INET, &clientAddr.sin_addr, host, NI_MAXHOST);
+					ClientConnect(this, clientSock, std::string(host));
+				}
+			}
+			// --------------------------
 
 			int bytesReceived = 0;
 			do
 			{
 				ZeroMemory(buf, MAX_BUFFER_SIZE);
 
-				bytesReceived = recv(client, buf, MAX_BUFFER_SIZE, 0);
+				bytesReceived = recv(clientSock, buf, MAX_BUFFER_SIZE, 0);
 				if (bytesReceived > 0)
 				{
 					if (MessageReceived != NULL)
 					{
-						std::string msg = std::string(buf, 0, bytesReceived);
-
-						if (!msg.empty())
-						{
-							MessageReceived(this, client, msg);
-						}
+						
+						// send TcpServer, client socket ID, client name, and the message received
+						MessageReceived(this, clientSock, host, std::string(buf, 0, bytesReceived));
 					}
 				}
 
 			} while (bytesReceived > 0);
 
-			closesocket(client);
+			// ---- client has disconnected ----
+
+			if (ClientDisconnect != NULL)
+			{
+				ClientDisconnect(this, clientSock, std::string(host));
+			}
+
+
+			closesocket(clientSock);
+			// ---------------------------------
 		}
 	}
 }
@@ -84,9 +114,11 @@ void CTcpListener::cleanup()
 
 
 // create a socket
+// create a socket
 SOCKET CTcpListener::createSocket()
 {
 	SOCKET listener = socket(AF_INET, SOCK_STREAM, 0);
+
 	if (listener != INVALID_SOCKET)
 	{
 
@@ -115,9 +147,10 @@ SOCKET CTcpListener::createSocket()
 	return listener;
 }
 
-// wait for a connection
-SOCKET CTcpListener::waitForConnection(SOCKET listener)
+// wait for a connection.  return socket ID and set client sockaddr info
+SOCKET CTcpListener::waitForConnection(SOCKET listener, sockaddr_in* client)
 {
-	SOCKET client = accept(listener, NULL, NULL);
-	return client;
+	int clientSize = sizeof(*client);
+	SOCKET clientSock = accept(listener, (sockaddr*) client, &clientSize);
+	return clientSock;
 }
