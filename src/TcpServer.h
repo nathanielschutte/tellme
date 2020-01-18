@@ -2,6 +2,7 @@
 
 #include <string>
 #include <iostream>
+#include <thread>
 
 // winsock functions, lib
 #include <WS2tcpip.h>
@@ -9,17 +10,20 @@
 
 #define MAX_BUFFER_SIZE (2048)
 
+#define CTCP_ERROR_RECV -1
+#define CTCP_ERROR_INVALID_SOCKET -2
+
 // forward declare
 class CTcpListener;
 
 // callback for data received
 typedef void(*MessageReceivedHandler)(CTcpListener* listener, int socketId, std::string clientName, std::string msg);
 
-// callback for client connect
+// callback for client connect/disconnect
 typedef void(*ClientConnectHandler)(CTcpListener* listener, int socketId, std::string clientName);
 
-// callback for client disconnect
-typedef void(*ClientDisconnectHandler)(CTcpListener* listener, int socketId, std::string clientName);
+// callback for error
+typedef void(*ServerErrorHandler)(CTcpListener* listener, int socketId, int error);
 
 
 class CTcpListener
@@ -45,10 +49,16 @@ public:
 
 
 	// add more handlers
-	void addClientDisconnectHandler(ClientDisconnectHandler cdHandler) { ClientDisconnect = cdHandler; }
+	void addClientDisconnectHandler(ClientConnectHandler cdHandler) { ClientDisconnect = cdHandler; }
 
 	void addClientConnectHandler(ClientConnectHandler ccHandler) { ClientConnect = ccHandler; }
 
+	void addErrorHandler(ServerErrorHandler seHandler) { ServerError = seHandler; }
+
+
+
+	// error handling
+	std::string errorString(int errorCode);
 
 private:
 
@@ -56,10 +66,13 @@ private:
 
 	SOCKET waitForConnection(SOCKET listener, sockaddr_in* client);
 
+	void runThread();
+
 	std::string m_ipAddress;
 	int m_port;
 
 	MessageReceivedHandler MessageReceived;
 	ClientConnectHandler ClientConnect;
-	ClientDisconnectHandler ClientDisconnect;
+	ClientConnectHandler ClientDisconnect;
+	ServerErrorHandler ServerError;
 };
