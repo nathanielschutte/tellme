@@ -13,7 +13,7 @@ using namespace std;
 
 ChatServer::ChatServer()
 {
-	ChatServer::setIpAddress(IP_WILLIAMS);
+	ChatServer::setIpAddress("100.71.201.19");
 	ChatServer::setPort(PORT);
 	ChatServer::makeServer();
 }

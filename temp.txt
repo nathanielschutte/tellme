@@ -1,0 +1,17 @@
+// ---- client connected ----
+			/*ZeroMemory(host, NI_MAXHOST);
+			ZeroMemory(service, NI_MAXSERV);
+
+			if (ClientConnect != NULL)
+			{
+				if (getnameinfo((sockaddr*) &clientAddr, sizeof(clientAddr), host, NI_MAXHOST, service, NI_MAXSERV, 0) == 0)
+				{
+					ClientConnect(this, clientSock, std::string(host));
+				}
+				else
+				{
+					inet_ntop(AF_INET, &clientAddr.sin_addr, host, NI_MAXHOST);
+					ClientConnect(this, clientSock, std::string(host));
+				}
+			}*/
+			// --------------------------

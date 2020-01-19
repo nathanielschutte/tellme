@@ -3,6 +3,7 @@
 #include <string>
 #include <iostream>
 #include <thread>
+#include <time.h>
 
 // winsock functions, lib
 #include <WS2tcpip.h>
@@ -24,6 +25,14 @@ typedef void(*ClientConnectHandler)(CTcpListener* listener, int socketId, std::s
 
 // callback for error
 typedef void(*ServerErrorHandler)(CTcpListener* listener, int socketId, int error);
+
+
+struct Message
+{
+	std::string msg;
+	std::string user_id;
+	std::string timestamp;
+};
 
 
 class CTcpListener
@@ -77,6 +86,10 @@ private:
 	ClientConnectHandler ClientConnect;
 	ClientConnectHandler ClientDisconnect;
 	ServerErrorHandler ServerError;
+
+	// send to all
+	// server shut down (msg)
+	// 
 
 
 	// testing

@@ -45,13 +45,13 @@ void CTcpListener::run()
 // process inside thread
 void CTcpListener::runThread()
 {
-	char buf[MAX_BUFFER_SIZE];
-	char host[NI_MAXHOST];
-	char service[NI_MAXSERV];
-	sockaddr_in clientAddr;
 
 	while (true)
 	{
+
+		fd_set master;
+		FD_ZERO(&master);
+
 		// create listen socket
 		SOCKET listener = createSocket();
 		if (listener == INVALID_SOCKET)
@@ -60,84 +60,104 @@ void CTcpListener::runThread()
 			break;
 		}
 
-		// wait for connection.  m_client and m_clientSize hold connected client data
-		SOCKET clientSock = waitForConnection(listener, &clientAddr);
-		if (clientSock != INVALID_SOCKET)
-		{
-			// close once client has connected so no other client can connect
-			closesocket(listener);
-		
-			// ---- client connected ----
-			ZeroMemory(host, NI_MAXHOST);
-			ZeroMemory(service, NI_MAXSERV);
+		FD_SET(listener, &master);
 
-			if (ClientConnect != NULL)
+		int exitNo = 0;
+		int bytesReceived = 0;
+		bool running = true;
+
+		// ---- client receive loop ----
+		while (running)
+		{
+
+			// copy master file descriptor set
+			fd_set copy = master;
+
+			int socketCount = select(0, &copy, nullptr, nullptr, nullptr);
+
+			for (int i = 0; i < socketCount; i++)
 			{
-				if (getnameinfo((sockaddr*) &clientAddr, sizeof(clientAddr), host, NI_MAXHOST, service, NI_MAXSERV, 0) == 0)
+
+				SOCKET sock = copy.fd_array[i];
+
+				if (sock == listener)
 				{
-					ClientConnect(this, clientSock, std::string(host));
+					sockaddr_in clientAddr;
+
+					SOCKET clientSock = waitForConnection(listener, &clientAddr);
+
+					FD_SET(clientSock, &master);
+
+					std::string welcomeMsg = "Welcome to the Awesome Chat Server!\r\n";
+					send(clientSock, welcomeMsg.c_str(), welcomeMsg.size() + 1, 0);
 				}
 				else
 				{
-					inet_ntop(AF_INET, &clientAddr.sin_addr, host, NI_MAXHOST);
-					ClientConnect(this, clientSock, std::string(host));
-				}
-			}
-			// --------------------------
+					char buf[MAX_BUFFER_SIZE];
+					ZeroMemory(buf, MAX_BUFFER_SIZE);
 
-			int exitNo = 0;
-			int bytesReceived = 0;
+					//char host[NI_MAXHOST];
+					//char service[NI_MAXSERV];
 
+					bytesReceived = recv(sock, buf, MAX_BUFFER_SIZE, 0);
 
-			// ---- client receive loop ----
-			while (true)
-			{
-				ZeroMemory(buf, MAX_BUFFER_SIZE);
-
-				bytesReceived = recv(clientSock, buf, MAX_BUFFER_SIZE, 0);
-				m_recvs++;
-				if (bytesReceived == SOCKET_ERROR)
-				{
-					exitNo = CTCP_ERROR_RECV;
-					break;
-				}
-
-				if (bytesReceived == 0)
-				{
-					exitNo = 0;
-					break;
-				}
-
-				if (MessageReceived != NULL)
-				{
-					std::string msg = std::string(buf, 0, bytesReceived);
-
-					if (msg.compare("\r\n") != 0)
+					if (bytesReceived == SOCKET_ERROR)
 					{
-						MessageReceived(this, clientSock, host, msg);
+						exitNo = CTCP_ERROR_RECV;
+						break;
+					}
+
+					if (bytesReceived <= 0)
+					{
+						closesocket(sock);
+						FD_CLR(sock, &master);
+					}
+					else
+					{
+						if (buf[0] == '\\')
+						{
+							std::string cmd = std::string(buf, bytesReceived);
+							if (cmd == "\\quit")
+							{
+								running = false;
+								break;
+							}
+
+							continue;
+						}
+
+						for (unsigned int i = 0; i < master.fd_count; i++)
+						{
+							SOCKET outSock = master.fd_array[i];
+							if (outSock != listener && outSock != sock)
+							{
+								std::string msg = std::string(buf, bytesReceived);
+								std::string strOut = "SOCKET #" + sock;
+								strOut = strOut + ": " + msg + "\r\n";
+
+								send(outSock, strOut.c_str(), strOut.size() + 1, 0);
+							}
+						}
 					}
 				}
 			}
-			// -----------------------------
 
-
-			// ---- client has disconnected ----
-
-			if (exitNo == 0 && ClientDisconnect != NULL)
-			{
-				ClientDisconnect(this, clientSock, std::string(host));
-			}
-			if (exitNo < 0)
-			{
-				ServerError(this, clientSock, exitNo);
-			}
-
-			closesocket(clientSock);
 			// ---------------------------------
 		}
-		else
+
+		FD_CLR(listener, &master);
+		closesocket(listener);
+
+		std::string msg = "Server is shutting down.\r\n";
+
+		while (master.fd_count > 0)
 		{
-			ServerError(this, clientSock, CTCP_ERROR_INVALID_SOCKET);
+			SOCKET sock = master.fd_array[0];
+
+			send(sock, msg.c_str(), msg.size() + 1, 0);
+
+			FD_CLR(sock, &master);
+			closesocket(sock);
 		}
 	}
 }
