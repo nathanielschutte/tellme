@@ -31,7 +31,7 @@ class CTcpListener
 
 public:
 
-	CTcpListener(std::string ipAddress, int port, MessageReceivedHandler msgHandler);
+	CTcpListener(std::string ipAddress, int port);
 
 	~CTcpListener();
 
@@ -49,6 +49,8 @@ public:
 
 
 	// add more handlers
+	void addMessageReceivedHandler(MessageReceivedHandler msgHandler) { MessageReceived = msgHandler; }
+
 	void addClientDisconnectHandler(ClientConnectHandler cdHandler) { ClientDisconnect = cdHandler; }
 
 	void addClientConnectHandler(ClientConnectHandler ccHandler) { ClientConnect = ccHandler; }
@@ -75,4 +77,8 @@ private:
 	ClientConnectHandler ClientConnect;
 	ClientConnectHandler ClientDisconnect;
 	ServerErrorHandler ServerError;
+
+
+	// testing
+	int m_recvs;
 };

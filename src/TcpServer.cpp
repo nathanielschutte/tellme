@@ -1,10 +1,9 @@
 #include "TcpServer.h"
 
-CTcpListener::CTcpListener(std::string ipAddress, int port, MessageReceivedHandler msgHandler)
-	: m_ipAddress(ipAddress), m_port(port), MessageReceived(msgHandler)
+CTcpListener::CTcpListener(std::string ipAddress, int port)
+	: m_ipAddress(ipAddress), m_port(port)
 {
-	ClientConnect = NULL;
-	ClientDisconnect = NULL;
+	m_recvs = 0;
 }
 
 
@@ -77,7 +76,6 @@ void CTcpListener::runThread()
 				if (getnameinfo((sockaddr*) &clientAddr, sizeof(clientAddr), host, NI_MAXHOST, service, NI_MAXSERV, 0) == 0)
 				{
 					ClientConnect(this, clientSock, std::string(host));
-					std::cout << host << std::endl;
 				}
 				else
 				{
@@ -90,16 +88,20 @@ void CTcpListener::runThread()
 			int exitNo = 0;
 			int bytesReceived = 0;
 
+
+			// ---- client receive loop ----
 			while (true)
 			{
 				ZeroMemory(buf, MAX_BUFFER_SIZE);
 
 				bytesReceived = recv(clientSock, buf, MAX_BUFFER_SIZE, 0);
+				m_recvs++;
 				if (bytesReceived == SOCKET_ERROR)
 				{
 					exitNo = CTCP_ERROR_RECV;
 					break;
 				}
+
 				if (bytesReceived == 0)
 				{
 					exitNo = 0;
@@ -108,30 +110,16 @@ void CTcpListener::runThread()
 
 				if (MessageReceived != NULL)
 				{
-					MessageReceived(this, clientSock, host, std::string(buf, 0, bytesReceived));
+					std::string msg = std::string(buf, 0, bytesReceived);
+
+					if (msg.compare("\r\n") != 0)
+					{
+						MessageReceived(this, clientSock, host, msg);
+					}
 				}
 			}
+			// -----------------------------
 
-			//do
-			//{
-			//	ZeroMemory(buf, MAX_BUFFER_SIZE);
-
-			//	bytesReceived = recv(clientSock, buf, MAX_BUFFER_SIZE, 0);
-			//	if (bytesReceived == SOCKET_ERROR)
-			//	{
-			//		break;
-			//	}
-			//	if (bytesReceived > 0)
-			//	{
-			//		if (MessageReceived != NULL)
-			//		{
-			//			
-			//			// send TcpServer, client socket ID, client name, and the message received
-			//			MessageReceived(this, clientSock, host, std::string(buf, 0, bytesReceived));
-			//		}
-			//	}
-
-			//} while (bytesReceived > 0);
 
 			// ---- client has disconnected ----
 

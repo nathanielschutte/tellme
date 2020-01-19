@@ -5,9 +5,11 @@
 *
 */
 
-#include "ChatServer.cpp"
+#include "ChatServer.h"
 
 int main()
 {
-	ChatServer server();
+	ChatServer chat;
+
+	chat.runChat();
 }
