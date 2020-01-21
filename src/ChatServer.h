@@ -13,6 +13,7 @@
 
 #define IP_WILLIAMS "192.168.2.64"
 #define IP_QUEENS "10.217.220.39"
+#define IP_LEHIGH "128.180.235.130"
 #define PORT 51115
 
 // --------------------------------
@@ -34,7 +35,7 @@ public:
 
 	static void ClientConnect(CTcpListener* listener, int client, std::string clientName);
 
-	static void ServerError(CTcpListener* listener, int client, int error);
+	static void ServerError(CTcpListener* listener, int client, int error, bool fatal);
 
 	// ------------------
 

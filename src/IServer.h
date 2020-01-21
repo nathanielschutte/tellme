@@ -31,9 +31,9 @@ public:
 
 	void makeServer() { server = new CTcpListener(m_ipAddress, m_port); }
 
-protected:
-
 	virtual void clean() = 0;
+
+protected:
 
 	
 	int m_port = DEFAULT_PORT;

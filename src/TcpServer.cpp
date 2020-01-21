@@ -4,6 +4,8 @@ CTcpListener::CTcpListener(std::string ipAddress, int port)
 	: m_ipAddress(ipAddress), m_port(port)
 {
 	m_recvs = 0;
+
+	setErrorHandler(DefaultServerError);
 }
 
 
@@ -15,7 +17,22 @@ CTcpListener::~CTcpListener()
 // send a message to specified client
 void CTcpListener::sendMsg(int clientSocket, std::string msg)
 {
+	msg = msg + "\r\n";
 	send(clientSocket, msg.c_str(), msg.size() + 1, 0);
+}
+
+void CTcpListener::sendAll(int clientSocket, std::string msg)
+{
+	for (unsigned int i = 0; i < m_master.fd_count; i++)
+	{
+		SOCKET outSock = m_master.fd_array[i];
+		if (outSock != m_listen && outSock != clientSocket)
+		{
+			std::string strOut = msg;
+
+			sendMsg(outSock, msg);
+		}
+	}
 }
 
 // init winsock
@@ -38,31 +55,27 @@ bool CTcpListener::init()
 void CTcpListener::run()
 {
 	runThread();
-	cleanup();
 }
 
 
 // process inside thread
 void CTcpListener::runThread()
 {
-
 	while (true)
 	{
+		FD_ZERO(&m_master);
 
-		fd_set master;
-		FD_ZERO(&master);
-
-		// create listen socket
-		SOCKET listener = createSocket();
-		if (listener == INVALID_SOCKET)
+		// ---- create listen socket ----
+		m_listen = createSocket();
+		if (m_listen == INVALID_SOCKET)
 		{
-			ServerError(this, NULL, CTCP_ERROR_INVALID_SOCKET);
+			ServerError(this, NULL, CTCP_ERROR_INVALID_SOCKET, true);
 			break;
 		}
+		// ------------------------------
 
-		FD_SET(listener, &master);
+		FD_SET(m_listen, &m_master);
 
-		int exitNo = 0;
 		int bytesReceived = 0;
 		bool running = true;
 
@@ -71,101 +84,135 @@ void CTcpListener::runThread()
 		{
 
 			// copy master file descriptor set
-			fd_set copy = master;
-
+			fd_set copy = m_master;
 			int socketCount = select(0, &copy, nullptr, nullptr, nullptr);
 
 			for (int i = 0; i < socketCount; i++)
 			{
-
 				SOCKET sock = copy.fd_array[i];
 
-				if (sock == listener)
+				// ---- client joined ----
+				if (sock == m_listen)
 				{
 					sockaddr_in clientAddr;
 
-					SOCKET clientSock = waitForConnection(listener, &clientAddr);
+					SOCKET clientSock = waitForConnection(m_listen, &clientAddr);
 
-					FD_SET(clientSock, &master);
+					char host[NI_MAXHOST];
+					char service[NI_MAXHOST];
+					ZeroMemory(host, NI_MAXHOST);
 
-					std::string welcomeMsg = "Welcome to the Awesome Chat Server!\r\n";
-					send(clientSock, welcomeMsg.c_str(), welcomeMsg.size() + 1, 0);
+					if (getnameinfo((sockaddr*)&clientAddr, sizeof(clientAddr), host, NI_MAXHOST, service, NI_MAXSERV, 0) == 0)
+					{
+						addClientInfo(clientSock, service, std::string(host));
+					}
+					else
+					{
+						inet_ntop(AF_INET, &clientAddr.sin_addr, host, NI_MAXHOST);
+						addClientInfo(clientSock, std::to_string(ntohs(clientAddr.sin_port)), std::string(host));
+					}
+
+					if (ClientConnect != NULL)
+					{
+						ClientConnect(this, clientSock, std::string(host));
+					}
+
+					FD_SET(clientSock, &m_master);
+
 				}
+				// -----------------------
+
+				// ---- receive message from client ----
 				else
 				{
 					char buf[MAX_BUFFER_SIZE];
 					ZeroMemory(buf, MAX_BUFFER_SIZE);
 
-					//char host[NI_MAXHOST];
-					//char service[NI_MAXSERV];
-
 					bytesReceived = recv(sock, buf, MAX_BUFFER_SIZE, 0);
 
 					if (bytesReceived == SOCKET_ERROR)
 					{
-						exitNo = CTCP_ERROR_RECV;
+						ServerError(this, sock, CTCP_ERROR_RECV, false);
 						break;
 					}
 
 					if (bytesReceived <= 0)
 					{
+						ClientDisconnect(this, sock, getClientName(sock));
+
 						closesocket(sock);
-						FD_CLR(sock, &master);
+						FD_CLR(sock, &m_master);
 					}
 					else
 					{
-						if (buf[0] == '\\')
+						std::string msg = std::string(buf, bytesReceived);
+
+						// TODO: process command handler. add cmd name and function pointer
+						if (buf[0] == '/')
 						{
-							std::string cmd = std::string(buf, bytesReceived);
-							if (cmd == "\\quit")
+							if (msg == "\quit")
 							{
 								running = false;
 								break;
 							}
-
 							continue;
 						}
 
-						for (unsigned int i = 0; i < master.fd_count; i++)
-						{
-							SOCKET outSock = master.fd_array[i];
-							if (outSock != listener && outSock != sock)
-							{
-								std::string msg = std::string(buf, bytesReceived);
-								std::string strOut = "SOCKET #" + sock;
-								strOut = strOut + ": " + msg + "\r\n";
-
-								send(outSock, strOut.c_str(), strOut.size() + 1, 0);
-							}
-						}
+						MessageReceived(this, sock, getClientName(sock), msg);
 					}
-				}
+				} // -----------------------------------
 			}
 
 			// ---------------------------------
 		}
 
-		FD_CLR(listener, &master);
-		closesocket(listener);
+		FD_CLR(m_listen, &m_master);
+		closesocket(m_listen);
 
-		std::string msg = "Server is shutting down.\r\n";
+		std::string msg = "Server is shutting down...\r\n";
 
-		while (master.fd_count > 0)
+		while (m_master.fd_count > 0)
 		{
-			SOCKET sock = master.fd_array[0];
+			SOCKET sock = m_master.fd_array[0];
 
 			send(sock, msg.c_str(), msg.size() + 1, 0);
 
-			FD_CLR(sock, &master);
+			FD_CLR(sock, &m_master);
 			closesocket(sock);
 		}
 	}
 }
 
+
+
 // cleanup
 void CTcpListener::cleanup()
 {
 	WSACleanup();
+}
+
+
+// get client name from socket number, default to hostname if no name given
+std::string CTcpListener::getClientName(int clientSock)
+{
+	std::string name = "";
+
+	for (unsigned int i = 0; i < m_client_list.size(); i++)
+	{
+		ClientInfo check = m_client_list[i];
+		if (clientSock == check.sock)
+		{
+			if (check.user_id.compare("") != 0)
+			{
+				name = check.user_id;
+			}
+			else {
+				name = check.host_id;
+			}
+		}
+	}
+
+	return name;
 }
 
 
@@ -219,6 +266,7 @@ SOCKET CTcpListener::createSocket()
 	return listener;
 }
 
+
 // wait for a connection.  return socket ID and set client sockaddr info
 SOCKET CTcpListener::waitForConnection(SOCKET listener, sockaddr_in* client)
 {
@@ -226,3 +274,115 @@ SOCKET CTcpListener::waitForConnection(SOCKET listener, sockaddr_in* client)
 	SOCKET clientSock = accept(listener, (sockaddr*) client, &clientSize);
 	return clientSock;
 }
+
+
+// add client info
+void CTcpListener::addClientInfo(int clientSock, std::string port, std::string host)
+{
+	ClientInfo new_client;
+	new_client.sock = clientSock;
+	new_client.host_id = host;
+	new_client.user_id = "";
+	m_client_list.push_back(new_client);
+}
+
+
+// remove specified client info
+void CTcpListener::deleteClientInfo(int clientSock)
+{
+	for (unsigned int i = 0; i < m_client_list.size(); i++)
+	{
+		m_client_list.erase(m_client_list.begin()+i);
+	}
+}
+
+
+// remove client info as stack
+void CTcpListener::popClientInfo(int clientSock)
+{
+	m_client_list.pop_back();
+}
+
+
+// rid trailing spaces and newline characters, optionally rid leading spaces (front_space)
+char* CTcpListener::stripMsg(char* msg, bool front_space)
+{
+	if (msg == nullptr || msg == "\r\n" || msg == "\n")
+	{
+		return nullptr;
+	}
+
+	int msgSize = strlen(msg);
+	int begin = 0;
+	int end = msgSize - 1;
+
+	if (front_space)
+	{
+		while (msg[begin] == ' ' && begin < msgSize)
+		{
+			begin++;
+		}
+		if (begin == strlen(msg))
+		{
+			return nullptr;
+		}
+	}
+
+	bool trash = true;
+
+	for (int i = end; i >= begin; i--)
+	{
+		if (msg[i] == '\r\n' || msg[i] == '\n' || msg[i] == ' ')
+		{
+			end--;
+		}
+		if (msg[i] != ' ')
+		{
+			trash = false;
+		}
+	}
+
+	if (trash) {
+		return nullptr;
+	}
+
+	char* newMsg = new char[end - begin + 1];
+	subStrCpy(newMsg, msg, begin, end);
+
+	return newMsg;
+}
+
+
+// substring
+void CTcpListener::subStrCpy(char* dest, const char* src, int begin, int end) 
+{
+	// TODO: better checks and error handling (this is rushed)
+	if (begin > end || begin < 0 || end >= strlen(src) 
+		|| end >= strlen(dest) || (begin - end + 1) > strlen(dest))
+	{
+		return;
+	}
+
+	int k = 0;
+	for (int i = begin; i <= end; i++)
+	{
+		dest[k] = src[i];
+		k++;
+	}
+}
+
+
+
+// ---- static default handler definitions ----
+
+void CTcpListener::DefaultServerError(CTcpListener* listener, int client, int error, bool fatal)
+{
+	std::cout << "SERVER ERROR: " << listener->errorString(error) << std::endl;
+
+	if (fatal)
+	{
+		system("exit");
+	}
+
+}
+// --------------------------------------------

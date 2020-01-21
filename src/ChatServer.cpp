@@ -13,7 +13,7 @@ using namespace std;
 
 ChatServer::ChatServer()
 {
-	ChatServer::setIpAddress("100.71.201.19");
+	ChatServer::setIpAddress(IP_LEHIGH);
 	ChatServer::setPort(PORT);
 	ChatServer::makeServer();
 }
@@ -26,15 +26,14 @@ ChatServer::~ChatServer()
 
 void ChatServer::runChat()
 {
-	if (! server->init())
+	if (!server->init())
 	{
 		return;
 	}
 
-	server->addMessageReceivedHandler(MessageReceived);
-	server->addClientConnectHandler(ClientConnect);
-	server->addClientDisconnectHandler(ClientDisconnect);
-	server->addErrorHandler(ServerError);
+	server->setMessageReceivedHandler(MessageReceived);
+	server->setClientConnectHandler(ClientConnect);
+	server->setClientDisconnectHandler(ClientDisconnect);
 
 	server->run();
 
@@ -52,22 +51,23 @@ void ChatServer::MessageReceived(CTcpListener* listener, int client, string clie
 {
 	cout << "[" << clientName << "] " << msg << endl;
 
-	listener->sendMsg(client, msg);
+	listener->sendAll(client, msg);
 }
 
 
 void ChatServer::ClientConnect(CTcpListener* listener, int client, string clientName)
 {
+	listener->sendMsg(client, "You joined the server");
+
+	listener->sendAll(client, clientName + " has joined the server");
+
 	cout << clientName << " has connected" << endl;
 }
 
 
 void ChatServer::ClientDisconnect(CTcpListener* listener, int client, string clientName)
 {
-	cout << clientName << " has disconnected" << endl;
-}
+	listener->sendAll(client, clientName + " has left the server");
 
-void ChatServer::ServerError(CTcpListener* listener, int client, int error)
-{
-	cerr << "SERVER ERROR: " << listener->errorString(error) << endl;
+	cout << clientName << " has disconnected" << endl;
 }

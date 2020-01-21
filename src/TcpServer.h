@@ -4,6 +4,7 @@
 #include <iostream>
 #include <thread>
 #include <time.h>
+#include <vector>
 
 // winsock functions, lib
 #include <WS2tcpip.h>
@@ -11,6 +12,7 @@
 
 #define MAX_BUFFER_SIZE (2048)
 
+// TODO: error code enum when expanded
 #define CTCP_ERROR_RECV -1
 #define CTCP_ERROR_INVALID_SOCKET -2
 
@@ -24,16 +26,17 @@ typedef void(*MessageReceivedHandler)(CTcpListener* listener, int socketId, std:
 typedef void(*ClientConnectHandler)(CTcpListener* listener, int socketId, std::string clientName);
 
 // callback for error
-typedef void(*ServerErrorHandler)(CTcpListener* listener, int socketId, int error);
+typedef void(*ServerErrorHandler)(CTcpListener* listener, int socketId, int error, bool fatal);
 
 
-struct Message
+struct ClientInfo
 {
-	std::string msg;
+	int sock;
+	std::string port;
+	std::string host_id;
 	std::string user_id;
-	std::string timestamp;
+	
 };
-
 
 class CTcpListener
 {
@@ -47,6 +50,9 @@ public:
 	// send a message to specified client
 	void sendMsg(int clientSocket, std::string msg);
 
+	// send a message to all other clients
+	void sendAll(int clientSocket, std::string msg);
+
 	// init winsock
 	bool init();
 
@@ -58,13 +64,18 @@ public:
 
 
 	// add more handlers
-	void addMessageReceivedHandler(MessageReceivedHandler msgHandler) { MessageReceived = msgHandler; }
+	void setMessageReceivedHandler(MessageReceivedHandler msgHandler) { MessageReceived = msgHandler; }
 
-	void addClientDisconnectHandler(ClientConnectHandler cdHandler) { ClientDisconnect = cdHandler; }
+	void setClientDisconnectHandler(ClientConnectHandler cdHandler) { ClientDisconnect = cdHandler; }
 
-	void addClientConnectHandler(ClientConnectHandler ccHandler) { ClientConnect = ccHandler; }
+	void setClientConnectHandler(ClientConnectHandler ccHandler) { ClientConnect = ccHandler; }
 
-	void addErrorHandler(ServerErrorHandler seHandler) { ServerError = seHandler; }
+	void setErrorHandler(ServerErrorHandler seHandler) { ServerError = seHandler; }
+
+
+	// client info stuff
+	std::string getClientName(int clientSock);
+
 
 
 
@@ -73,25 +84,41 @@ public:
 
 private:
 
+	std::string m_ipAddress;
+	int m_port;
+	int m_recvs;
+	fd_set m_master;
+	SOCKET m_listen;
+
+	std::vector<ClientInfo> m_client_list;
+
+	void runThread();
+
+	// ---- helper net functions ----
 	SOCKET createSocket();
 
 	SOCKET waitForConnection(SOCKET listener, sockaddr_in* client);
 
-	void runThread();
+	void addClientInfo(int clientSock, std::string port, std::string host);
 
-	std::string m_ipAddress;
-	int m_port;
+	void deleteClientInfo(int clientSock);
+
+	void popClientInfo(int clientSock);
+
+	char* stripMsg(char* msg, bool front_space);
+
+	// ------------------------------
+
+	void subStrCpy(char* dest, const char* src, int begin, int end);
+
+
+	// ---- default handlers ----
+	static void DefaultServerError(CTcpListener* listener, int client, int error, bool fatal);
+
+	// --------------------------
 
 	MessageReceivedHandler MessageReceived;
 	ClientConnectHandler ClientConnect;
 	ClientConnectHandler ClientDisconnect;
 	ServerErrorHandler ServerError;
-
-	// send to all
-	// server shut down (msg)
-	// 
-
-
-	// testing
-	int m_recvs;
 };
