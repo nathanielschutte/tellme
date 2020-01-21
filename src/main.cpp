@@ -8,7 +8,9 @@
 
 int main()
 {
-	ChatServer chat;
+	ChatServer* chat = new ChatServer();
 
-	chat.runChat();
+	chat->runChat();
+
+	delete chat;
 }

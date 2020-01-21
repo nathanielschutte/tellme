@@ -28,6 +28,9 @@ typedef void(*ClientConnectHandler)(CTcpListener* listener, int socketId, std::s
 // callback for error
 typedef void(*ServerErrorHandler)(CTcpListener* listener, int socketId, int error, bool fatal);
 
+// callback for server cleanup
+typedef void(*ServerCleanupHandler)(CTcpListener*, int clientCount);
+
 
 struct ClientInfo
 {
@@ -72,9 +75,15 @@ public:
 
 	void setErrorHandler(ServerErrorHandler seHandler) { ServerError = seHandler; }
 
+	void setErrorHandler(ServerCleanupHandler scHandler) { ServerCleanup = scHandler; }
+
 
 	// client info stuff
 	std::string getClientName(int clientSock);
+
+	int getClientSocket(std::string name);
+
+	ClientInfo* getClientInfo(int clientSock);
 
 
 
@@ -105,11 +114,12 @@ private:
 
 	void popClientInfo(int clientSock);
 
-	char* stripMsg(char* msg, bool front_space);
+	bool stripMsg(std::string& msg, bool front_space);
 
 	// ------------------------------
 
 	void subStrCpy(char* dest, const char* src, int begin, int end);
+
 
 
 	// ---- default handlers ----
@@ -121,4 +131,5 @@ private:
 	ClientConnectHandler ClientConnect;
 	ClientConnectHandler ClientDisconnect;
 	ServerErrorHandler ServerError;
+	ServerCleanupHandler ServerCleanup;
 };

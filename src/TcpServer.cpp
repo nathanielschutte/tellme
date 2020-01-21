@@ -140,25 +140,17 @@ void CTcpListener::runThread()
 					{
 						ClientDisconnect(this, sock, getClientName(sock));
 
-						closesocket(sock);
 						FD_CLR(sock, &m_master);
+						deleteClientInfo(sock);
+						closesocket(sock);
 					}
 					else
 					{
 						std::string msg = std::string(buf, bytesReceived);
-
-						// TODO: process command handler. add cmd name and function pointer
-						if (buf[0] == '/')
+						if (msg != "\r\n" && stripMsg(msg, true))
 						{
-							if (msg == "\quit")
-							{
-								running = false;
-								break;
-							}
-							continue;
+							MessageReceived(this, sock, getClientName(sock), msg);
 						}
-
-						MessageReceived(this, sock, getClientName(sock), msg);
 					}
 				} // -----------------------------------
 			}
@@ -168,18 +160,6 @@ void CTcpListener::runThread()
 
 		FD_CLR(m_listen, &m_master);
 		closesocket(m_listen);
-
-		std::string msg = "Server is shutting down...\r\n";
-
-		while (m_master.fd_count > 0)
-		{
-			SOCKET sock = m_master.fd_array[0];
-
-			send(sock, msg.c_str(), msg.size() + 1, 0);
-
-			FD_CLR(sock, &m_master);
-			closesocket(sock);
-		}
 	}
 }
 
@@ -188,6 +168,14 @@ void CTcpListener::runThread()
 // cleanup
 void CTcpListener::cleanup()
 {
+	while (m_master.fd_count > 0)
+	{
+		SOCKET sock = m_master.fd_array[0];
+		FD_CLR(sock, &m_master); // clear in set
+		deleteClientInfo(sock); // clear in info vector
+		closesocket(sock); // close socket
+	}
+
 	WSACleanup();
 }
 
@@ -213,6 +201,38 @@ std::string CTcpListener::getClientName(int clientSock)
 	}
 
 	return name;
+}
+
+
+// get socket number for client with name (user or host name)
+int CTcpListener::getClientSocket(std::string name)
+{
+	int socket = -1;
+
+	for (unsigned int i = 0; i < m_client_list.size(); i++)
+	{
+		ClientInfo check = m_client_list[i];
+		if (name == check.user_id || name == check.host_id)
+		{
+			socket = check.sock;
+		}
+	}
+
+	return socket;
+}
+
+
+// return clientinfo data, settable
+ClientInfo* CTcpListener::getClientInfo(int clientSock)
+{
+	for (unsigned int i = 0; i < m_client_list.size(); i++)
+	{
+		ClientInfo check = m_client_list[i];
+		if (clientSock == check.sock)
+		{
+			return &m_client_list[i];
+		}
+	}
 }
 
 
@@ -292,7 +312,11 @@ void CTcpListener::deleteClientInfo(int clientSock)
 {
 	for (unsigned int i = 0; i < m_client_list.size(); i++)
 	{
-		m_client_list.erase(m_client_list.begin()+i);
+		if (clientSock == m_client_list[i].sock)
+		{
+			m_client_list.erase(m_client_list.begin() + i);
+			break;
+		}
 	}
 }
 
@@ -305,26 +329,26 @@ void CTcpListener::popClientInfo(int clientSock)
 
 
 // rid trailing spaces and newline characters, optionally rid leading spaces (front_space)
-char* CTcpListener::stripMsg(char* msg, bool front_space)
+bool CTcpListener::stripMsg(std::string& msg, bool front_space)
 {
-	if (msg == nullptr || msg == "\r\n" || msg == "\n")
+	if (msg == "\r\n" || msg == "\n")
 	{
-		return nullptr;
+		return false;
 	}
 
-	int msgSize = strlen(msg);
+	int msgSize = msg.size();
 	int begin = 0;
 	int end = msgSize - 1;
 
 	if (front_space)
 	{
-		while (msg[begin] == ' ' && begin < msgSize)
+		while (begin < msgSize && msg.at(begin) == ' ')
 		{
 			begin++;
 		}
-		if (begin == strlen(msg))
+		if (begin >= msgSize)
 		{
-			return nullptr;
+			return false;
 		}
 	}
 
@@ -332,24 +356,24 @@ char* CTcpListener::stripMsg(char* msg, bool front_space)
 
 	for (int i = end; i >= begin; i--)
 	{
-		if (msg[i] == '\r\n' || msg[i] == '\n' || msg[i] == ' ')
+		if (msg.at(i) == '\r' || msg.at(i) == '\n' || msg.at(i) == ' ')
 		{
 			end--;
 		}
-		if (msg[i] != ' ')
+		else
 		{
 			trash = false;
+			break;
 		}
 	}
 
 	if (trash) {
-		return nullptr;
+		return false;
 	}
 
-	char* newMsg = new char[end - begin + 1];
-	subStrCpy(newMsg, msg, begin, end);
+	msg = msg.substr(begin, end - begin + 1);
 
-	return newMsg;
+	return true;
 }
 
 

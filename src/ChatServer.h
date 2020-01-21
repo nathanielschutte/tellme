@@ -39,9 +39,10 @@ public:
 
 	// ------------------
 
+	static void processClientCommand(CTcpListener* listener, int client, std::string cmd);
+
 	// ---- Unique functionality ----
 	void runChat();
-
 
 	// ------------------------------
 
