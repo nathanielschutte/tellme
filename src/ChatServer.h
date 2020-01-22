@@ -16,6 +16,8 @@
 #define IP_LEHIGH "128.180.235.130"
 #define PORT 51115
 
+const std::string joinMsg = "======= You joined the server ========\r\nPreface commands with forward slash \'/\'.\r\nUse \'/help\' for commands list\r\n======================================\r\n";
+
 // --------------------------------
 
 
@@ -39,7 +41,6 @@ public:
 
 	// ------------------
 
-	static void processClientCommand(CTcpListener* listener, int client, std::string cmd);
 
 	// ---- Unique functionality ----
 	void runChat();
@@ -49,4 +50,10 @@ public:
 private:
 
 	void clean();
+
+	static void processClientCommand(CTcpListener* listener, int client, std::string cmd);
+
+	static void renameClient(CTcpListener* listener, int client, std::string name);
+
+	static void listClients(CTcpListener* listener, int client);
 };

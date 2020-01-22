@@ -64,7 +64,7 @@ void ChatServer::MessageReceived(CTcpListener* listener, int client, string clie
 
 void ChatServer::ClientConnect(CTcpListener* listener, int client, string clientName)
 {
-	listener->sendMsg(client, "You joined the server");
+	listener->sendMsg(client, joinMsg);
 
 	listener->sendAll(client, clientName + " has joined the server");
 
@@ -80,33 +80,71 @@ void ChatServer::ClientDisconnect(CTcpListener* listener, int client, string cli
 	cout << clientName << " has disconnected" << endl;
 }
 
-void ChatServer::processClientCommand(CTcpListener* listener, int client, std::string msg)
+void ChatServer::processClientCommand(CTcpListener* listener, int client, string msg)
 {
 	int i = 1;
 	while (i < msg.size() && msg.at(i) != ' ') { i++; }
+	std::string cmd = msg.substr(1, i - 1);
 
 	// no arg commands
 	if (i == msg.size())
 	{
-		// TODO: support more
+		if (cmd == "list")
+		{
+			listClients(listener, client);
+		}
+		else if (cmd == "help")
+		{
+
+		}
 	}
 	else
 	{
-		std::string cmd = msg.substr(1, i - 1);
-
-		// TODO: better command identification and execution
 		if (cmd == "name")
 		{
-
 			// TODO: actual arg processing
 			string username = msg.substr(i + 1);
-			string changeMsg = listener->getClientName(client) + " changed name to " + username;
-
-			cout << changeMsg << endl;
-
-			listener->sendAll(client, changeMsg);
-			listener->sendMsg(client, "Name changed to " + username);
-			listener->getClientInfo(client)->user_id = username;
+			if (username.size() > 24)
+			{
+				listener->sendMsg(client, "OOPS! Name too long (must be < 25 characters)");
+			}
+			else
+			{
+				renameClient(listener, client, username);
+			}
 		}
 	}
+}
+
+void ChatServer::renameClient(CTcpListener* listener, int client, string name)
+{
+	string changeMsg = listener->getClientName(client) + " changed name to " + name;
+
+	cout << changeMsg << endl;
+
+	listener->sendAll(client, changeMsg);
+	listener->sendMsg(client, "Name changed to " + name);
+	listener->getClientInfo(client)->user_id = name;
+}
+
+
+void ChatServer::listClients(CTcpListener* listener, int client)
+{
+	vector<ClientInfo> client_list = listener->getClientList();
+
+	int clientCount = client_list.size();
+	string sendStr = "=== Active online: " + to_string(clientCount) + " ===\r\n";
+
+	for (int i = 0; i < clientCount; i++)
+	{
+		ClientInfo client_item = client_list[i];
+		string name = client_item.user_id;
+		if (name == "")
+		{
+			name = "NONE";
+		}
+		sendStr += "[" + to_string(i+1) + "] " + name + "\t(" + client_item.host_id + ":" + client_item.port + ")\r\n";
+	}
+
+	listener->sendMsg(client, sendStr);
 }

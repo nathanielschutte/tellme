@@ -168,6 +168,7 @@ void CTcpListener::runThread()
 // cleanup
 void CTcpListener::cleanup()
 {
+	//ServerCleanup();
 	while (m_master.fd_count > 0)
 	{
 		SOCKET sock = m_master.fd_array[0];
@@ -233,6 +234,12 @@ ClientInfo* CTcpListener::getClientInfo(int clientSock)
 			return &m_client_list[i];
 		}
 	}
+}
+
+// get the full list
+std::vector<ClientInfo> CTcpListener::getClientList()
+{
+	return m_client_list;
 }
 
 

@@ -75,7 +75,7 @@ public:
 
 	void setErrorHandler(ServerErrorHandler seHandler) { ServerError = seHandler; }
 
-	void setErrorHandler(ServerCleanupHandler scHandler) { ServerCleanup = scHandler; }
+	void setCleanupHandler(ServerCleanupHandler scHandler) { ServerCleanup = scHandler; }
 
 
 	// client info stuff
@@ -84,6 +84,8 @@ public:
 	int getClientSocket(std::string name);
 
 	ClientInfo* getClientInfo(int clientSock);
+
+	std::vector<ClientInfo> getClientList();
 
 
 
