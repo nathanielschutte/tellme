@@ -29,7 +29,7 @@ typedef void(*ClientConnectHandler)(CTcpListener* listener, int socketId, std::s
 typedef void(*ServerErrorHandler)(CTcpListener* listener, int socketId, int error, bool fatal);
 
 // callback for server cleanup
-typedef void(*ServerCleanupHandler)(CTcpListener*, int clientCount);
+typedef void(*ServerCleanupHandler)(CTcpListener* listener, int clientCount);
 
 
 struct ClientInfo
@@ -101,6 +101,7 @@ private:
 	fd_set m_master;
 	SOCKET m_listen;
 
+	// this needs to be a hash table...
 	std::vector<ClientInfo> m_client_list;
 
 	void runThread();

@@ -31,11 +31,8 @@ public:
 
 	void makeServer() { server = new CTcpListener(m_ipAddress, m_port); }
 
-	virtual void clean() = 0;
-
 protected:
 
-	
 	int m_port = DEFAULT_PORT;
 	std::string m_ipAddress;
 

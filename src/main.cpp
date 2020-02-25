@@ -8,7 +8,7 @@
 
 int main()
 {
-	ChatServer* chat = new ChatServer();
+	ChatServer* chat = new ChatServer();;
 
 	chat->runChat();
 

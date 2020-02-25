@@ -28,8 +28,6 @@ void CTcpListener::sendAll(int clientSocket, std::string msg)
 		SOCKET outSock = m_master.fd_array[i];
 		if (outSock != m_listen && outSock != clientSocket)
 		{
-			std::string strOut = msg;
-
 			sendMsg(outSock, msg);
 		}
 	}
@@ -414,6 +412,5 @@ void CTcpListener::DefaultServerError(CTcpListener* listener, int client, int er
 	{
 		system("exit");
 	}
-
 }
 // --------------------------------------------

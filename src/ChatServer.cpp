@@ -10,17 +10,43 @@
 
 using namespace std;
 
-
-ChatServer::ChatServer()
-{
-	ChatServer::setIpAddress(IP_LEHIGH);
-	ChatServer::setPort(PORT);
-	ChatServer::makeServer();
+ChatServer::ChatServer() {
+	init();
 }
 
-ChatServer::~ChatServer()
-{
-	ChatServer::clean();
+ChatServer::~ChatServer() {
+	clean();
+}
+
+void ChatServer::init() {
+	setIpAddress(IP_LEHIGH);
+	setPort(PORT);
+	makeServer();
+
+	// messing with C practices
+	commandCount = 0;
+
+	addCommand("list", executeListClients, 0, "", "list all clients online");
+	addCommand("name", executeName, 1, "[username]", "change username");
+	addCommand("help", executeHelpMenu, 0, "", "list all commands");
+
+	// -------------------
+}
+
+void ChatServer::addCommand(string name, ClientCommandCall call, int minCmd, string usage, string desc) {
+	if (commandCount >= COMMAND_MAX) {
+		return;
+	}
+	else {
+		ClientCommand cmd;
+		cmd.cName = name;
+		cmd.cExecute = call;
+		cmd.cMinCmd = minCmd;
+		cmd.cUsage = usage;
+		cmd.cDesc = desc;
+		cmds.push_back(cmd);
+		commandCount++;
+	}
 }
 
 
@@ -57,7 +83,7 @@ void ChatServer::MessageReceived(CTcpListener* listener, int client, string clie
 	{
 		cout << "[" << clientName << "] " << msg << endl;
 
-		listener->sendAll(client, msg);
+		listener->sendAll(client, "[" + clientName + "] " + msg);
 	}
 }
 
@@ -83,38 +109,62 @@ void ChatServer::ClientDisconnect(CTcpListener* listener, int client, string cli
 void ChatServer::processClientCommand(CTcpListener* listener, int client, string msg)
 {
 	int i = 1;
+	while (i < msg.size() && msg.at(i) == ' ') { i++; }
+	int j = i;
 	while (i < msg.size() && msg.at(i) != ' ') { i++; }
-	std::string cmd = msg.substr(1, i - 1);
+	std::string cmd = msg.substr(j, i - 1);
 
-	// no arg commands
-	if (i == msg.size())
-	{
-		if (cmd == "list")
-		{
-			listClients(listener, client);
-		}
-		else if (cmd == "help")
-		{
+	argv_t argv;
+	int argc;
+	if (i < msg.size()) {
+		argv = parseArguments(msg.substr(i + 1));
+		argc = argv.size();
+	}
+	else {
+		argc = 0;
+	}
 
+	bool execSuccess = false;
+	for (i = 0; i < commandCount; i++) {
+		ClientCommand clientCmd = cmds[i];
+		if (clientCmd.cName == cmd) {
+			execSuccess = true;
+			
+			// not enough arguments provides, do not execute
+			if (clientCmd.cMinCmd > argc) {
+				listener->sendMsg(client, "Not enough arguments! Usage: /" + clientCmd.cName + " " + clientCmd.cUsage);
+				
+				break;
+			}
+			
+			// command found, execute if not null
+			ClientCommandCall call = clientCmd.cExecute;
+			if (call != NULL) {
+				call(listener, client, argv);
+			}
+			break;
 		}
 	}
-	else
-	{
-		if (cmd == "name")
-		{
-			// TODO: actual arg processing
-			string username = msg.substr(i + 1);
-			if (username.size() > 24)
-			{
-				listener->sendMsg(client, "OOPS! Name too long (must be < 25 characters)");
-			}
-			else
-			{
-				renameClient(listener, client, username);
-			}
-		}
+
+	// command not found
+	if (!execSuccess) {
+		listener->sendMsg(client, "\'" + cmd + "\' command not found");
 	}
 }
+
+argv_t ChatServer::parseArguments(string msg) {
+	int i = 0;
+	int begin;
+	argv_t res;
+	while (i < msg.size()) {
+		begin = i;
+		while (i < msg.size() && msg.at(i) != ' ') { i++; }
+		res.push_back(msg.substr(begin, i - begin));
+		i++;
+	}
+	return res;
+}
+
 
 void ChatServer::renameClient(CTcpListener* listener, int client, string name)
 {
@@ -128,12 +178,15 @@ void ChatServer::renameClient(CTcpListener* listener, int client, string name)
 }
 
 
-void ChatServer::listClients(CTcpListener* listener, int client)
+
+// ========== Command Definitions ==========
+
+void ChatServer::executeListClients(CTcpListener* listener, int client, argv_t argv)
 {
 	vector<ClientInfo> client_list = listener->getClientList();
 
 	int clientCount = client_list.size();
-	string sendStr = "=== Active online: " + to_string(clientCount) + " ===\r\n";
+	string sendStr = "\n\r=== Active online: " + to_string(clientCount) + " ===\r\n";
 
 	for (int i = 0; i < clientCount; i++)
 	{
@@ -148,3 +201,28 @@ void ChatServer::listClients(CTcpListener* listener, int client)
 
 	listener->sendMsg(client, sendStr);
 }
+
+void ChatServer::executeName(CTcpListener* listener, int client, argv_t argv) {
+	string username = argv[0];
+	if (username.size() > 24)
+	{
+		listener->sendMsg(client, "OOPS! Name too long (must be < 25 characters)");
+	}
+	else
+	{
+		renameClient(listener, client, username);
+	}
+}
+
+void ChatServer::executeHelpMenu(CTcpListener* listener, int client, argv_t argv) {
+	string menu = "";
+	for (int i = 0; i < commandCount; i++) {
+		ClientCommand c = cmds[i];
+		menu += " - \'" + c.cName + "\' " + c.cDesc + "\r\n   Usage: /" +c.cName + " " + c.cUsage + "\r\n";
+		if (i < commandCount - 1) {
+			menu += "\n";
+		}
+	}
+	listener->sendMsg(client, menu);
+}
+
