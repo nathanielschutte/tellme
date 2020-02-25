@@ -2,11 +2,12 @@
 a server class on windows
 
 ## information
-visual studio project
+- visual studio project
+- connect RAW with PuTTY or similar (LAN)
 
 ### tellme endgame:
- reusable server class - multiple clients, client IDs, externalize all handler functionality.
+ reusable server class - multiple clients, client IDs, externalize all handler functionality (done)
  
 ### TODO: test tellme server with implementations:
- - write a multiple client chat without any weird blocking, double sends, and show client names
+ - write a very good multiple client chat (100% done, just need to write simple client)
  - facilitate 1-on-1 turn-based "gameplay" (sim peer-to-peer)
