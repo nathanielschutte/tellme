@@ -5,6 +5,9 @@ a server class on windows
 - visual studio project
 - connect RAW with PuTTY or similar (LAN)
 
+## author
+Nathaniel Schutte
+
 ### tellme endgame:
  reusable server class - multiple clients, client IDs, externalize all handler functionality (done)
  
